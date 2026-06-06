@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gato Cazador - Edición IA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* --- ESTILOS GENERALES RETRO --- */
+        body { 
+            margin: 0; 
+            background: #256087; 
+            font-family: 'Press Start 2P', cursive; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            color: white;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* --- MENÚS (ESTILO NES) --- */
+        .menu { 
+            text-align: center; 
+            background: #c6c6c6; 
+            padding: 40px; 
+            border: 4px solid #fff; 
+            box-shadow: 6px 6px 0px #000; 
+            color: black; 
+            max-width: 400px;
+            width: 90%;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin-top: 0;
+            text-shadow: 2px 2px 0px #fff;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-top: 0;
+        }
+
+        /* --- BOTONES --- */
+        button { 
+            padding: 15px; 
+            font-size: 12px; 
+            cursor: pointer; 
+            background: #c6c6c6; 
+            border: 4px solid #fff; 
+            box-shadow: 4px 4px 0 #000; 
+            font-family: 'Press Start 2P', cursive; 
+            margin: 10px 0; 
+            width: 100%; 
+            box-sizing: border-box;
+            display: block;
+        }
+        
+        button:hover { 
+            background: #e0e0e0; 
+        }
+
+        button:active {
+            box-shadow: 1px 1px 0 #000;
+            transform: translate(3px, 3px);
+        }
+
+        /* --- PANTALLA DE JUEGO --- */
+        canvas { 
+            border: 4px solid #fff; 
+            background: black; 
+            display: none; 
+            box-shadow: 6px 6px 0px #000;
+            max-width: 100%;
+        }
+
+        /* --- MARCADOR SUPERIOR --- */
+        #marcador {
+            display: none; 
+            width: 600px;
+            max-width: 100%;
+            margin-bottom: 15px; 
+            padding: 12px;
+            background: #1f1f1f;
+            color: white;
+            border: 4px solid white;
+            font-size: 10px;
+            justify-content: space-between;
+            box-shadow: 4px 4px 0px black;
+            box-sizing: border-box;
+        }
+
+        /* --- TIENDA DINÁMICA --- */
+        #lista-skins {
+            margin: 20px 0;
+            max-height: 220px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* --- NOTIFICACIÓN DE LOGROS --- */
+        #logro { 
+            position: fixed; 
+            top: 20px; 
+            right: -400px; 
+            background: #222; 
+            color: gold; 
+            padding: 15px 20px; 
+            border: 3px solid gold; 
+            font-size: 11px; 
+            box-shadow: 4px 4px 0px black; 
+            z-index: 999; 
+            transition: right 0.5s ease; 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="marcador">
+        <span>Pts: <span id="puntos-valor">0</span></span>
+        <span>💰: <span id="monedas-valor">0</span></span>
+        <span>Lvl: <span id="nivel-valor">1</span></span>
+        <span>⏱️: <span id="tiempo-valor">60</span>s</span>
+    </div>
+
+    <canvas id="juego" width="600" height="400"></canvas>
+
+    <div id="menu-inicio" class="menu">
+        <h1>GATO CAZADOR</h1>
+        
+        <p style="font-size: 11px; color: #ff0055; margin-bottom: 25px; text-shadow: 1px 1px 0px #000; font-weight: bold;">
+            AMENAZA I.A.: LVL <span id="ia-nivel">1</span>
+        </p>
+        
+        <button onclick="empezarJuego()">Jugar</button>
+        <button onclick="abrirAjustes()">Ajustes</button>
+    </div>
+
+    <div id="menu-ajustes" class="menu" style="display:none;">
+        <h2>AJUSTES</h2>
+        <button onclick="cambiarDificultad()" id="btn-dificultad">Dificultad: Fácil</button>
+        <button onclick="abrirTienda()">Tienda de Skins</button>
+        <button onclick="volverMenu()">Volver</button>
+    </div>
+
+    <div id="menu-tienda" class="menu" style="display:none;">
+        <h2>TIENDA DE CAZADORES</h2>
+        <div id="lista-skins"></div>
+        <button onclick="volverMenu()">Volver al Menú</button>
+    </div>
+
+    <div id="fin-juego" class="menu" style="display:none;">
+        <h1>¡TIEMPO AGOTADO!</h1>
+        <p style="font-size: 14px; margin: 20px 0;">Puntuación: <span id="puntos-finales" style="color: #ff0055;">0</span></p>
+        <button onclick="reiniciarJuego()">Volver a jugar</button>
+        <button onclick="volverMenu()">Ir al Menú</button>
+    </div>
+
+    <div id="logro"></div>
+
+    <script src="juego.js"></script>
+</body>
+</html>
