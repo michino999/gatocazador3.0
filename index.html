@@ -3,78 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gato Cazador - Edición IA</title>
+    <title>El Reino de Felinor - Dark Fantasy</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        /* --- ESTILOS GENERALES RETRO --- */
+        /* --- ESTILOS DARK FANTASY --- */
         body { 
             margin: 0; 
-            background: #256087; 
+            background: #0a0a0a; 
             font-family: 'Press Start 2P', cursive; 
             display: flex; 
             flex-direction: column; 
             justify-content: center; 
             align-items: center; 
             height: 100vh; 
-            color: white;
+            color: #c9c9c9;
             overflow: hidden;
             user-select: none;
         }
 
-        /* --- MENÚS (ESTILO NES) --- */
+        /* --- MENÚS (ESTILO DARK FANTASY) --- */
         .menu { 
             text-align: center; 
-            background: #c6c6c6; 
+            background: #1a1a2e; 
             padding: 40px; 
-            border: 4px solid #fff; 
-            box-shadow: 6px 6px 0px #000; 
-            color: black; 
-            max-width: 400px;
+            border: 4px solid #4a0e0e; 
+            box-shadow: 0 0 20px #4a0e0e, 6px 6px 0px #000; 
+            color: #d4af37; 
+            max-width: 500px;
             width: 90%;
             box-sizing: border-box;
         }
 
         h1 {
-            font-size: 22px;
+            font-size: 24px;
             margin-top: 0;
-            text-shadow: 2px 2px 0px #fff;
+            text-shadow: 0 0 10px #ff0000, 2px 2px 0px #000;
+            color: #ff4444;
         }
 
         h2 {
             font-size: 18px;
             margin-top: 0;
+            color: #d4af37;
+        }
+
+        p {
+            color: #a0a0a0;
+            font-size: 10px;
+            line-height: 1.6;
         }
 
         /* --- BOTONES --- */
         button { 
             padding: 15px; 
-            font-size: 12px; 
+            font-size: 11px; 
             cursor: pointer; 
-            background: #c6c6c6; 
-            border: 4px solid #fff; 
-            box-shadow: 4px 4px 0 #000; 
+            background: #2e1a1a; 
+            border: 3px solid #4a0e0e; 
+            box-shadow: 3px 3px 0 #000, 0 0 10px rgba(74, 14, 14, 0.5); 
             font-family: 'Press Start 2P', cursive; 
             margin: 10px 0; 
             width: 100%; 
             box-sizing: border-box;
             display: block;
+            color: #d4af37;
+            transition: all 0.2s;
         }
         
         button:hover { 
-            background: #e0e0e0; 
+            background: #3d2222; 
+            box-shadow: 3px 3px 0 #000, 0 0 15px rgba(212, 175, 55, 0.3);
         }
 
         button:active {
             box-shadow: 1px 1px 0 #000;
-            transform: translate(3px, 3px);
+            transform: translate(2px, 2px);
         }
 
         /* --- PANTALLA DE JUEGO --- */
         canvas { 
-            border: 4px solid #fff; 
-            background: black; 
+            border: 4px solid #4a0e0e; 
+            background: #0f0f0f; 
             display: none; 
-            box-shadow: 6px 6px 0px #000;
+            box-shadow: 0 0 30px rgba(74, 14, 14, 0.6), 6px 6px 0px #000;
             max-width: 100%;
         }
 
@@ -85,82 +96,142 @@
             max-width: 100%;
             margin-bottom: 15px; 
             padding: 12px;
-            background: #1f1f1f;
-            color: white;
-            border: 4px solid white;
+            background: #1a1a2e;
+            color: #d4af37;
+            border: 3px solid #4a0e0e;
             font-size: 10px;
             justify-content: space-between;
-            box-shadow: 4px 4px 0px black;
+            box-shadow: 0 0 15px rgba(74, 14, 14, 0.4), 4px 4px 0px black;
             box-sizing: border-box;
         }
 
-        /* --- TIENDA DINÁMICA --- */
-        #lista-skins {
+        /* --- SELECCIÓN DE CLASE --- */
+        .clase-container {
+            display: flex;
+            justify-content: space-around;
             margin: 20px 0;
-            max-height: 220px;
-            overflow-y: auto;
-            padding-right: 5px;
         }
 
-        /* --- NOTIFICACIÓN DE LOGROS --- */
-        #logro { 
+        .clase-opcion {
+            background: #2e1a1a;
+            border: 2px solid #4a0e0e;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 30%;
+        }
+
+        .clase-opcion:hover {
+            background: #3d2222;
+            border-color: #d4af37;
+        }
+
+        .clase-opcion.seleccionada {
+            border-color: #d4af37;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+        }
+
+        .clase-icon {
+            font-size: 30px;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .clase-nombre {
+            font-size: 10px;
+            color: #d4af37;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .clase-desc {
+            font-size: 8px;
+            color: #888;
+            line-height: 1.4;
+        }
+
+        /* --- NOTIFICACIÓN DE SALA --- */
+        #notificacion-sala { 
             position: fixed; 
-            top: 20px; 
-            right: -400px; 
-            background: #222; 
-            color: gold; 
-            padding: 15px 20px; 
-            border: 3px solid gold; 
-            font-size: 11px; 
-            box-shadow: 4px 4px 0px black; 
+            top: 50%; 
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9); 
+            color: #ff4444; 
+            padding: 30px 50px; 
+            border: 3px solid #ff0000; 
+            font-size: 16px; 
+            box-shadow: 0 0 30px #ff0000; 
             z-index: 999; 
-            transition: right 0.5s ease; 
+            transition: opacity 0.5s ease;
+            text-align: center;
+        }
+
+        #notificacion-sala h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+        }
+
+        #notificacion-sala p {
+            margin: 0;
+            font-size: 10px;
+            color: #aaa;
         }
     </style>
 </head>
 <body>
 
     <div id="marcador">
-        <span>Pts: <span id="puntos-valor">0</span></span>
-        <span>💰: <span id="monedas-valor">0</span></span>
-        <span>Lvl: <span id="nivel-valor">1</span></span>
-        <span>⏱️: <span id="tiempo-valor">60</span>s</span>
+        <span>❤️: <span id="vida-valor">100</span></span>
+        <span>⚔️: <span id="sala-valor">1</span></span>
+        <span>💀: <span id="enemigos-valor">0</span></span>
+        <span>✨: <span id="xp-valor">0</span></span>
     </div>
 
     <canvas id="juego" width="600" height="400"></canvas>
 
     <div id="menu-inicio" class="menu">
-        <h1>GATO CAZADOR</h1>
+        <h1>👑 EL REINO DE FELINOR 👑</h1>
         
-        <p style="font-size: 11px; color: #ff0055; margin-bottom: 25px; text-shadow: 1px 1px 0px #000; font-weight: bold;">
-            AMENAZA I.A.: LVL <span id="ia-nivel">1</span>
+        <p style="color: #ff6666; margin-bottom: 20px; text-shadow: 1px 1px 0px #000;">
+            La oscuridad se cierne sobre Felinor.<br>
+            El dragón Malachar amenaza la Corona.
         </p>
         
-        <button onclick="empezarJuego()">Jugar</button>
-        <button onclick="abrirAjustes()">Ajustes</button>
-    </div>
+        <p style="font-size: 9px; color: #888; margin-bottom: 25px;">
+            Elige tu camino, aventurero felino.
+        </p>
 
-    <div id="menu-ajustes" class="menu" style="display:none;">
-        <h2>AJUSTES</h2>
-        <button onclick="cambiarDificultad()" id="btn-dificultad">Dificultad: Fácil</button>
-        <button onclick="abrirTienda()">Tienda de Skins</button>
-        <button onclick="volverMenu()">Volver</button>
-    </div>
-
-    <div id="menu-tienda" class="menu" style="display:none;">
-        <h2>TIENDA DE CAZADORES</h2>
-        <div id="lista-skins"></div>
-        <button onclick="volverMenu()">Volver al Menú</button>
+        <div class="clase-container">
+            <div class="clase-opcion" onclick="seleccionarClase('guerrero')" id="btn-guerrero">
+                <span class="clase-icon">⚔️</span>
+                <span class="clase-nombre">GUERRERO</span>
+                <span class="clase-desc">Valentía y poder territorial. Alto daño, vida media.</span>
+            </div>
+            <div class="clase-opcion" onclick="seleccionarClase('arquero')" id="btn-arquero">
+                <span class="clase-icon">🏹</span>
+                <span class="clase-nombre">ARQUERO</span>
+                <span class="clase-desc">Agilidad felina. Rápido, preciso, pero frágil.</span>
+            </div>
+            <div class="clase-opcion" onclick="seleccionarClase('mago')" id="btn-mago">
+                <span class="clase-icon">🔮</span>
+                <span class="clase-nombre">MAGO</span>
+                <span class="clase-desc">Sabiduría ancestral. Hechizos poderosos, poca vida.</span>
+            </div>
+        </div>
+        
+        <button onclick="empezarJuego()" id="btn-jugar" disabled>JUGAR</button>
     </div>
 
     <div id="fin-juego" class="menu" style="display:none;">
-        <h1>¡TIEMPO AGOTADO!</h1>
-        <p style="font-size: 14px; margin: 20px 0;">Puntuación: <span id="puntos-finales" style="color: #ff0055;">0</span></p>
-        <button onclick="reiniciarJuego()">Volver a jugar</button>
-        <button onclick="volverMenu()">Ir al Menú</button>
+        <h1 id="titulo-fin">¡HAS CAÍDO!</h1>
+        <p style="font-size: 12px; margin: 20px 0;">Salas Completadas: <span id="salas-finales" style="color: #ff4444;">0</span></p>
+        <p style="font-size: 10px; margin: 10px 0;">Enemigos Derrotados: <span id="enemigos-finales" style="color: #ff6666;">0</span></p>
+        <button onclick="reiniciarJuego()">Intentar de Nuevo</button>
+        <button onclick="volverMenu()">Menú Principal</button>
     </div>
 
-    <div id="logro"></div>
+    <div id="notificacion-sala" style="display:none;"></div>
 
     <script src="juego.js"></script>
 </body>
