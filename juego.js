@@ -1,182 +1,104 @@
+// ============================================================
+// EL REINO DE FELINOR - Dark Fantasy Felina
+// ============================================================
+
 const canvas = document.getElementById("juego");
 const ctx = canvas.getContext("2d");
 
-const statsPersonajes = {
-    "🐱": { nombre: "Gato", vel: 20, alcance: 50 },
-    "🐯": { nombre: "Tigre", vel: 25, alcance: 50 },
-    "🦁": { nombre: "León", vel: 20, alcance: 80 },
-    "🐶": { nombre: "Perro", vel: 22, alcance: 65 }
+// --- CONFIGURACIÓN DE CLASES ---
+const clases = {
+    guerrero: { 
+        emoji: "🐱", 
+        nombre: "Guerrero", 
+        vida: 120, 
+        daño: 25, 
+        velocidad: 4,
+        alcance: 50,
+        color: "#ff6b6b"
+    },
+    arquero: { 
+        emoji: "🙀", 
+        nombre: "Arquero", 
+        vida: 80, 
+        daño: 35, 
+        velocidad: 6,
+        alcance: 150,
+        color: "#4ecdc4"
+    },
+    mago: { 
+        emoji: "😼", 
+        nombre: "Mago", 
+        vida: 70, 
+        daño: 45, 
+        velocidad: 3,
+        alcance: 120,
+        color: "#a55eea"
+    }
 };
 
-// --- PROTECCIÓN DE DATOS ---
-const SALT = "ratEscape_v1";
-function guardarMonedasSeguro(valor) {
-    let hash = btoa(String(valor) + SALT);
-    localStorage.setItem("monedas", valor);
-    localStorage.setItem("monedas_check", hash);
-    // Actualiza el marcador visual si existe
-    const elMonedas = document.getElementById("monedas-valor");
-    if (elMonedas) elMonedas.innerText = valor;
-}
-
-function leerMonedasSeguro() {
-    let valor = Number(localStorage.getItem("monedas")) || 0;
-    let hashGuardado = localStorage.getItem("monedas_check");
-    let hashEsperado = btoa(String(valor) + SALT);
-    if (hashGuardado && hashGuardado !== hashEsperado) {
-        valor = 0;
-        guardarMonedasSeguro(0);
-    }
-    return valor;
-}
-
-// --- VARIABLES DE CONTROL ---
-let tiempo = 60;
-let puntos = 0;
-let record = Number(localStorage.getItem("record")) || 0;
-let juegoIniciado = false;
-let nivel = 1;
-let velocidadGato = 20;
-let dificultad = 1;
-let loopId = null; 
-let monedas = leerMonedasSeguro(); 
-let skinActual = localStorage.getItem("skin") || "🐱";
-let skinsCompradas = JSON.parse(localStorage.getItem("skinsCompradas")) || ["🐱"];
-let experienciaRaton = Number(localStorage.getItem("experienciaRaton")) || 0;
-
-let skinsDisponibles = [
-    { emoji: "🐱", nombre: "Gato", precio: 0 },
-    { emoji: "🐯", nombre: "Tigre", precio: 100 },
-    { emoji: "🦁", nombre: "León", precio: 500 },
-    { emoji: "🐶", nombre: "Perro", precio: 200 }
+// --- SALAS DE LA MAZMORRA ---
+const salas = [
+    { nombre: "Sala de Guardias", enemigos: ["🐀", "🐀", "🐀"], boss: false, fondo: "#1a1a2e" },
+    { nombre: "Pasillo Oscuro", enemigos: ["🐀", "💀", "🐀"], boss: false, fondo: "#16213e" },
+    { nombre: "Cripta de las Sombras", enemigos: ["💀", "💀", "🦇"], boss: false, fondo: "#0f0f0f" },
+    { nombre: "Cámara del Terror", enemigos: ["🦇", "💀", "👻"], boss: false, fondo: "#1a0a0a" },
+    { nombre: "Nido del Dragón", enemigos: ["🐉"], boss: true, fondo: "#2d0a0a" }
 ];
 
-let gato = { x: 300, y: 200, w: 35, h: 35 };
-let raton = { x: 100, y: 100, w: 25, h: 25 };
+// --- VARIABLES DE ESTADO ---
+let claseSeleccionada = null;
+let juegoIniciado = false;
+let salaActual = 0;
+let enemigosDerrotados = 0;
+let xp = 0;
+let nivel = 1;
 
-let quesoDorado = { x: 0, y: 0, w: 30, h: 30, activo: false, tiempoEnPantalla: 0 };
-let ratonSuper = false;
-let tiempoSuper = 0;
+let jugador = {
+    x: 300,
+    y: 200,
+    w: 40,
+    h: 40,
+    vida: 100,
+    vidaMax: 100,
+    daño: 20,
+    velocidad: 4,
+    alcance: 50,
+    emoji: "🐱",
+    color: "#fff",
+    atacando: false,
+    direccion: "abajo",
+    invencible: false
+};
+
+let enemigos = [];
+let proyectiles = [];
+let efectos = [];
+
+// --- SISTEMA DE COMBATE ---
+let ultimoAtaque = 0;
+let cooldownAtaque = 400; // ms
 
 // ============================================================
-// --- CEREBRO DEL RATÓN: SISTEMA DE IA ---
+// --- FUNCIONES DE INTERFAZ ---
 // ============================================================
-const GRID_COLS = 10;
-const GRID_ROWS = 8;
-let mapaPeligro = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(0));
 
-function actualizarMapaPeligro() {
-    let col = Math.floor((gato.x / canvas.width) * GRID_COLS);
-    let row = Math.floor((gato.y / canvas.height) * GRID_ROWS);
-    col = Math.max(0, Math.min(GRID_COLS - 1, col));
-    row = Math.max(0, Math.min(GRID_ROWS - 1, row));
-    mapaPeligro[row][col] = Math.min(mapaPeligro[row][col] + 0.8, 10);
-
-    for (let r = 0; r < GRID_ROWS; r++) {
-        for (let c = 0; c < GRID_COLS; c++) {
-            mapaPeligro[r][c] = Math.max(0, mapaPeligro[r][c] - 0.01);
-        }
-    }
-}
-
-function peligroEnPunto(px, py) {
-    let col = Math.floor((px / canvas.width) * GRID_COLS);
-    let row = Math.floor((py / canvas.height) * GRID_ROWS);
-    col = Math.max(0, Math.min(GRID_COLS - 1, col));
-    row = Math.max(0, Math.min(GRID_ROWS - 1, row));
-    return mapaPeligro[row][col];
-}
-
-const HISTORIAL_MAX = 8;
-let historialGato = [];
-
-function actualizarHistorialGato() {
-    historialGato.push({ x: gato.x, y: gato.y });
-    if (historialGato.length > HISTORIAL_MAX) {
-        historialGato.shift();
-    }
-}
-
-function predecirPosicionGato(framesFuturos) {
-    if (historialGato.length < 3) return { x: gato.x, y: gato.y };
-    let totalDx = 0, totalDy = 0;
-    let muestras = Math.min(historialGato.length - 1, 5);
-    for (let i = historialGato.length - 1; i >= historialGato.length - muestras; i--) {
-        totalDx += historialGato[i].x - historialGato[i - 1].x;
-        totalDy += historialGato[i].y - historialGato[i - 1].y;
-    }
-    return {
-        x: gato.x + ((totalDx / muestras) * framesFuturos),
-        y: gato.y + ((totalDy / muestras) * framesFuturos)
-    };
-}
-
-let anguloEscapeActual = 0;
-let framesSinRecalcular = 0;
-const FRAMES_RECALCULO = 12;
-
-function elegirMejorAnguloEscape(dx, dy, vel) {
-    framesSinRecalcular++;
-    if (framesSinRecalcular < FRAMES_RECALCULO) return anguloEscapeActual;
-    framesSinRecalcular = 0;
-
-    let mejorAngulo = Math.atan2(dy, dx) + Math.PI;
-    let mejorPuntaje = -Infinity;
-    let candidatos = 16;
-    let gatoFuturo = predecirPosicionGato(10);
-
-    for (let i = 0; i < candidatos; i++) {
-        let angulo = (i / candidatos) * Math.PI * 2;
-        let futuroX = Math.max(20, Math.min(canvas.width - 20, raton.x + Math.cos(angulo) * vel * 8));
-        let futuroY = Math.max(20, Math.min(canvas.height - 20, raton.y + Math.sin(angulo) * vel * 8));
-
-        let distGato = Math.hypot(futuroX - gatoFuturo.x, futuroY - gatoFuturo.y);
-        let puntajeDistancia = distGato / canvas.width;
-        let peligro = peligroEnPunto(futuroX, futuroY);
-        let puntajePeligro = -(peligro / 10) * 0.6;
-
-        let margen = 50;
-        let cercaPared =
-            (futuroX < margen ? (margen - futuroX) / margen : 0) +
-            (futuroX > canvas.width - margen ? (futuroX - (canvas.width - margen)) / margen : 0) +
-            (futuroY < margen ? (margen - futuroY) / margen : 0) +
-            (futuroY > canvas.height - margen ? (futuroY - (canvas.height - margen)) / margen : 0);
-        let puntajePared = -cercaPared * 0.5;
-
-        let puntajeTotal = puntajeDistancia + puntajePeligro + puntajePared;
-        if (puntajeTotal > mejorPuntaje) {
-            mejorPuntaje = puntajeTotal;
-            mejorAngulo = angulo;
-        }
-    }
-    anguloEscapeActual = mejorAngulo;
-    return mejorAngulo;
-}
-
-const MARGEN_SEGURIDAD_QUESO = 1.4;
-const DISTANCIA_ABORTAR_QUESO = 90;
-
-function evaluarQuesoSeguro() {
-    if (!quesoDorado.activo) return false;
-    let distRatonQueso = Math.hypot(quesoDorado.x - raton.x, quesoDorado.y - raton.y);
-    let distGatoQueso = Math.hypot(quesoDorado.x - gato.x, quesoDorado.y - gato.y);
-    let gatoFuturo = predecirPosicionGato(15);
-    let distGatoFuturoQueso = Math.hypot(quesoDorado.x - gatoFuturo.x, quesoDorado.y - gatoFuturo.y);
-
-    if (distGatoQueso < DISTANCIA_ABORTAR_QUESO || distGatoFuturoQueso < DISTANCIA_ABORTAR_QUESO) return false;
-    return distRatonQueso < distGatoQueso * MARGEN_SEGURIDAD_QUESO;
-}
-
-// --- INTERFAZ Y NAVEGACIÓN SEGURA ---
-function actualizarNivelVisualIA() {
-    let expGuardada = Number(localStorage.getItem("experienciaRaton")) || 0;
-    let nivelIA = Math.floor(expGuardada / 5) + 1;
-    const elemento = document.getElementById("ia-nivel");
-    if (elemento) elemento.innerText = nivelIA;
+function seleccionarClase(clase) {
+    claseSeleccionada = clase;
+    
+    // Remover selección previa
+    document.querySelectorAll(".clase-opcion").forEach(el => {
+        el.classList.remove("seleccionada");
+    });
+    
+    // Añadir selección actual
+    document.getElementById(`btn-${clase}`).classList.add("seleccionada");
+    
+    // Habilitar botón de jugar
+    document.getElementById("btn-jugar").disabled = false;
 }
 
 function cambiarPantalla(pantallaObjetivo) {
-    const pantallas = ["menu-inicio", "menu-ajustes", "menu-tienda", "fin-juego", "juego", "marcador"];
+    const pantallas = ["menu-inicio", "fin-juego", "juego", "marcador"];
     
     pantallas.forEach(id => {
         const p = document.getElementById(id);
@@ -194,340 +116,524 @@ function cambiarPantalla(pantallaObjetivo) {
     }
 }
 
-// --- CONTROL DE TIENDA DINÁMICA ---
-function actualizarBotonesTienda() {
-    const lista = document.getElementById("lista-skins");
-    if (!lista) return;
-
-    lista.innerHTML = ""; // Limpia los botones viejos hardcodeados
+function mostrarNotificacionSala(nombre, descripcion) {
+    const notif = document.getElementById("notificacion-sala");
+    notif.innerHTML = `<h3>${nombre}</h3><p>${descripcion}</p>`;
+    notif.style.display = "block";
+    notif.style.opacity = "1";
     
-    skinsDisponibles.forEach(skin => {
-        const btn = document.createElement("button");
-        
-        if (skinActual === skin.emoji) {
-            btn.innerText = `${skin.nombre} (Equipado)`;
-        } else if (skinsCompradas.includes(skin.emoji)) {
-            btn.innerText = `Equipar ${skin.nombre}`;
-        } else {
-            btn.innerText = `${skin.nombre} (${skin.precio} 💰)`;
-        }
-
-        btn.onclick = () => comprarOEquipar(skin.emoji, skin.precio);
-        lista.appendChild(btn);
-    });
+    setTimeout(() => {
+        notif.style.opacity = "0";
+        setTimeout(() => {
+            notif.style.display = "none";
+        }, 500);
+    }, 2000);
 }
 
-function comprarOEquipar(emoji, precio) {
-    if (skinsCompradas.includes(emoji)) {
-        equiparSkin(emoji);
-    } else if (monedas >= precio) {
-        monedas -= precio;
-        skinsCompradas.push(emoji);
-        guardarMonedasSeguro(monedas);
-        localStorage.setItem("skinsCompradas", JSON.stringify(skinsCompradas));
-        alert("¡Compra exitosa!");
-        equiparSkin(emoji);
-    } else {
-        alert("¡No tienes suficientes Gatosolares! Tienes: " + monedas);
-    }
-    actualizarBotonesTienda();
+function actualizarMarcador() {
+    const vidaEl = document.getElementById("vida-valor");
+    const salaEl = document.getElementById("sala-valor");
+    const enemigosEl = document.getElementById("enemigos-valor");
+    const xpEl = document.getElementById("xp-valor");
+    
+    if (vidaEl) vidaEl.innerText = Math.max(0, Math.floor(jugador.vida));
+    if (salaEl) salaEl.innerText = salaActual + 1;
+    if (enemigosEl) enemigosEl.innerText = enemigosDerrotados;
+    if (xpEl) xpEl.innerText = xp;
 }
 
-function equiparSkin(emoji) {
-    skinActual = emoji;
-    localStorage.setItem("skin", skinActual);
-    actualizarBotonesTienda();
-}
+// ============================================================
+// --- INICIO Y FIN DEL JUEGO ---
+// ============================================================
 
-// --- FLUJO DE JUEGO ---
 function empezarJuego() {
-    juegoIniciado = true;
-    tiempo = 60;
-    puntos = 0;
+    if (!claseSeleccionada) return;
+    
+    const config = clases[claseSeleccionada];
+    
+    jugador.vida = config.vida;
+    jugador.vidaMax = config.vida;
+    jugador.daño = config.daño;
+    jugador.velocidad = config.velocidad;
+    jugador.alcance = config.alcance;
+    jugador.emoji = config.emoji;
+    jugador.color = config.color;
+    jugador.x = 300;
+    jugador.y = 200;
+    
+    salaActual = 0;
+    enemigosDerrotados = 0;
+    xp = 0;
     nivel = 1;
-    quesoDorado.activo = false;
-    ratonSuper = false;
-    tiempoSuper = 0;
-
-    gato.x = 300; gato.y = 200;
-    raton.x = 100; raton.y = 100;
-    raton.targetX = null; raton.targetY = null;
-
-    mapaPeligro = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(0));
-    historialGato = [];
-    anguloEscapeActual = 0;
-    framesSinRecalcular = 0;
-
-    const elPuntos = document.getElementById("puntos-valor");
-    const elMonedas = document.getElementById("monedas-valor");
-    const elNivel = document.getElementById("nivel-valor");
-    const elTiempo = document.getElementById("tiempo-valor");
-
-    if (elPuntos) elPuntos.innerText = puntos;
-    if (elMonedas) elMonedas.innerText = monedas;
-    if (elNivel) elNivel.innerText = nivel;
-    if (elTiempo) elTiempo.innerText = tiempo;
-
+    juegoIniciado = true;
+    
     cambiarPantalla("juego");
-    if (loopId !== null) cancelAnimationFrame(loopId);
-    loopId = requestAnimationFrame(gameLoop);
+    cargarSala(salaActual);
+    
+    gameLoop();
 }
 
-function terminarJuego() {
+function cargarSala(indice) {
+    if (indice >= salas.length) {
+        victoriaFinal();
+        return;
+    }
+    
+    const sala = salas[indice];
+    enemigos = [];
+    proyectiles = [];
+    
+    // Crear enemigos
+    sala.enemigos.forEach((tipo, i) => {
+        let enemigo;
+        if (tipo === "🐉") {
+            // Boss dragón
+            enemigo = {
+                x: 300,
+                y: 100,
+                w: 80,
+                h: 80,
+                tipo: "boss",
+                emoji: "🐉",
+                vida: 200,
+                vidaMax: 200,
+                daño: 30,
+                velocidad: 2,
+                estado: "idle",
+                timerAtaque: 0
+            };
+        } else if (tipo === "💀") {
+            enemigo = {
+                x: 100 + (i % 2) * 400,
+                y: 80 + Math.random() * 100,
+                w: 35,
+                h: 35,
+                tipo: "esqueleto",
+                emoji: "💀",
+                vida: 50,
+                vidaMax: 50,
+                daño: 15,
+                velocidad: 1.5,
+                estado: "perseguir"
+            };
+        } else if (tipo === "🦇") {
+            enemigo = {
+                x: Math.random() * 500 + 50,
+                y: 50 + Math.random() * 100,
+                w: 30,
+                h: 30,
+                tipo: "murcielago",
+                emoji: "🦇",
+                vida: 30,
+                vidaMax: 30,
+                daño: 10,
+                velocidad: 3,
+                estado: "volar"
+            };
+        } else {
+            // Rata
+            enemigo = {
+                x: 100 + (i % 3) * 200,
+                y: 100 + Math.random() * 150,
+                w: 30,
+                h: 30,
+                tipo: "rata",
+                emoji: "🐀",
+                vida: 40,
+                vidaMax: 40,
+                daño: 12,
+                velocidad: 2,
+                estado: "perseguir"
+            };
+        }
+        enemigos.push(enemigo);
+    });
+    
+    mostrarNotificacionSala(sala.nombre, sala.boss ? "¡CUIDADO! Un jefe te espera..." : "Derrota a todos los enemigos");
+    actualizarMarcador();
+}
+
+function terminarJuego(motivo = "derrota") {
     juegoIniciado = false;
-    if (puntos > record) {
-        record = puntos;
-        localStorage.setItem("record", record);
+    
+    const tituloFin = document.getElementById("titulo-fin");
+    const salasFinales = document.getElementById("salas-finales");
+    const enemigosFinales = document.getElementById("enemigos-finales");
+    
+    if (motivo === "victoria") {
+        tituloFin.innerText = "¡HAS SALVADO FELINOR!";
+        tituloFin.style.color = "#ffd700";
+    } else {
+        tituloFin.innerText = "¡HAS CAÍDO!";
+        tituloFin.style.color = "#ff4444";
     }
+    
+    if (salasFinales) salasFinales.innerText = salaActual;
+    if (enemigosFinales) enemigosFinales.innerText = enemigosDerrotados;
+    
     cambiarPantalla("fin-juego");
-    const elFinal = document.getElementById("puntos-finales");
-    if (elFinal) elFinal.innerText = puntos;
-    actualizarNivelVisualIA();
 }
 
-function reiniciarJuego() { empezarJuego(); }
-function abrirAjustes() { cambiarPantalla("menu-ajustes"); }
-function abrirTienda() { cambiarPantalla("menu-tienda"); actualizarBotonesTienda(); }
-function volverMenu() { cambiarPantalla("menu-inicio"); actualizarNivelVisualIA(); }
-
-function cambiarDificultad() {
-    dificultad = (dificultad % 3) + 1;
-    let nombres = ["Fácil", "Normal", "Difícil"];
-    document.getElementById("btn-dificultad").innerText = `Dificultad: ${nombres[dificultad-1]}`;
-    velocidadGato = dificultad * 5 + 15;
+function victoriaFinal() {
+    terminarJuego("victoria");
 }
 
-// --- ACTUALIZACIÓN DE IA ---
-function actualizarRaton() {
-    actualizarMapaPeligro();
-    actualizarHistorialGato();
-
-    let dx = gato.x - raton.x;
-    let dy = gato.y - raton.y;
-    let dist = Math.hypot(dx, dy);
-
-    let expGuardada = Number(localStorage.getItem("experienciaRaton")) || 0;
-    let nivelAprendizaje = Math.min(expGuardada, 100);
-    let radioVision = 180 + (nivelAprendizaje * 1.5);
-    let vel = (3 + (nivel * 0.8) + (nivelAprendizaje * 0.03)) * (ratonSuper ? 1.6 : 1);
-
-    let margenPared = 60;
-    let cercaDePared = (raton.x < margenPared || raton.x > canvas.width - margenPared - raton.w || raton.y < margenPared || raton.y > canvas.height - margenPared - raton.h);
-
-    let estadoMental = "EXPLORANDO";
-    let gatoPredicho = predecirPosicionGato(8);
-    let distEfectiva = Math.min(dist, Math.hypot(gatoPredicho.x - raton.x, gatoPredicho.y - raton.y));
-
-    if (distEfectiva < radioVision) {
-        if (distEfectiva < 60 && cercaDePared) estadoMental = "ARRINCONADO";
-        else if (distEfectiva < 60) estadoMental = "ALERTA_MÁXIMA";
-        else estadoMental = "HUYENDO";
-    } else if (quesoDorado.activo && evaluarQuesoSeguro()) {
-        estadoMental = "BUSCAR_QUESO";
-    }
-
-    switch (estadoMental) {
-        case "ARRINCONADO":
-            let anguloArrinconado = elegirMejorAnguloEscape(dx, dy, vel);
-            raton.x += Math.cos(anguloArrinconado) * (vel * 2.5);
-            raton.y += Math.sin(anguloArrinconado) * (vel * 2.5);
-            raton.targetX = null;
-            break;
-        case "ALERTA_MÁXIMA":
-            if (Math.random() < 0.35) {
-                let anguloFinta = Math.atan2(dy, dx) + (Math.PI / 2);
-                raton.x += Math.cos(anguloFinta) * vel * 2;
-                raton.y += Math.sin(anguloFinta) * vel * 2;
-            } else {
-                let anguloAlerta = elegirMejorAnguloEscape(dx, dy, vel);
-                raton.x += Math.cos(anguloAlerta) * vel * 1.5;
-                raton.y += Math.sin(anguloAlerta) * vel * 1.5;
-            }
-            raton.targetX = null;
-            break;
-        case "HUYENDO":
-            let anguloHuida = elegirMejorAnguloEscape(dx, dy, vel);
-            raton.x += Math.cos(anguloHuida) * vel;
-            raton.y += Math.sin(anguloHuida) * vel;
-            raton.targetX = null;
-            break;
-        case "BUSCAR_QUESO":
-            let qdx = quesoDorado.x - raton.x;
-            let qdy = quesoDorado.y - raton.y;
-            if (Math.hypot(quesoDorado.x - gato.x, quesoDorado.y - gato.y) < DISTANCIA_ABORTAR_QUESO) {
-                let anguloAbortar = elegirMejorAnguloEscape(dx, dy, vel);
-                raton.x += Math.cos(anguloAbortar) * vel * 1.3;
-                raton.y += Math.sin(anguloAbortar) * vel * 1.3;
-            } else if (Math.hypot(qdx, qdy) < 25) {
-                quesoDorado.activo = false;
-                ratonSuper = true;
-                tiempoSuper = 5;
-            } else {
-                let anguloQueso = Math.atan2(qdy, qdx);
-                raton.x += Math.cos(anguloQueso) * vel;
-                raton.y += Math.sin(anguloQueso) * vel;
-            }
-            raton.targetX = null;
-            break;
-        case "EXPLORANDO":
-            if (raton.targetX === null || raton.targetX === undefined || Math.random() < 0.02) {
-                let mejorX = 0, mejorY = 0, menorPeligro = Infinity;
-                for (let i = 0; i < 6; i++) {
-                    let cx = Math.random() * (canvas.width - 50) + 25;
-                    let cy = Math.random() * (canvas.height - 50) + 25;
-                    let p = peligroEnPunto(cx, cy);
-                    if (p < menorPeligro) { menorPeligro = p; mejorX = cx; mejorY = cy; }
-                }
-                raton.targetX = mejorX; raton.targetY = mejorY;
-            }
-            if (raton.targetX !== null && raton.targetX !== undefined) {
-                if (Math.hypot(raton.targetX - raton.x, raton.targetY - raton.y) < 8) {
-                    raton.targetX = null; raton.targetY = null;
-                } else {
-                    raton.x += (raton.targetX - raton.x) * 0.05;
-                    raton.y += (raton.targetY - raton.y) * 0.05;
-                }
-            }
-            break;
-    }
-    raton.x = Math.max(0, Math.min(canvas.width - raton.w, raton.x));
-    raton.y = Math.max(0, Math.min(canvas.height - raton.h, raton.y));
+function reiniciarJuego() {
+    empezarJuego();
 }
 
-// --- BUCLE CENTRAL ---
-function gameLoop() {
-    if (!juegoIniciado) return;
-    moverGatoConTouch();
-    actualizarRaton();
-    dibujar();
-    loopId = requestAnimationFrame(gameLoop);
+function volverMenu() {
+    juegoIniciado = false;
+    cambiarPantalla("menu-inicio");
+    document.querySelectorAll(".clase-opcion").forEach(el => {
+        el.classList.remove("seleccionada");
+    });
+    document.getElementById("btn-jugar").disabled = true;
+    claseSeleccionada = null;
 }
 
-function dibujar() {
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// ============================================================
+// --- CONTROLES ---
+// ============================================================
 
-    if (quesoDorado.activo) {
-        ctx.font = "30px Arial";
-        ctx.fillText("🧀", quesoDorado.x, quesoDorado.y + 25);
-    }
+const teclas = {};
 
-    ctx.font = "40px Arial";
-    ctx.fillText(skinActual, gato.x, gato.y + 35);
-    ctx.fillText("🐭", raton.x, raton.y + 30);
-
-    if (ratonSuper) {
-        ctx.font = "25px Arial";
-        ctx.fillText("⚡", raton.x + 5, raton.y - 5);
-    }
-}
-
-// --- TEMPORIZADORES EN SEGUNDOS ---
-setInterval(() => {
-    if (!juegoIniciado) return;
-    tiempo--;
-    const elTiempo = document.getElementById("tiempo-valor");
-    if (elTiempo) elTiempo.innerText = tiempo;
-
-    if (tiempo === 45) { nivel = 2; const n = document.getElementById("nivel-valor"); if (n) n.innerText = nivel; }
-    if (tiempo === 30) { nivel = 3; const n = document.getElementById("nivel-valor"); if (n) n.innerText = nivel; }
-    if (tiempo === 15) { nivel = 4; const n = document.getElementById("nivel-valor"); if (n) n.innerText = nivel; }
-
-    if (tiempo % 20 === 0 && tiempo > 0 && !quesoDorado.activo) {
-        quesoDorado.activo = true;
-        quesoDorado.x = Math.random() * (canvas.width - 40) + 10;
-        quesoDorado.y = Math.random() * (canvas.height - 40) + 10;
-        quesoDorado.tiempoEnPantalla = 8;
-    }
-
-    if (quesoDorado.activo) {
-        quesoDorado.tiempoEnPantalla--;
-        if (quesoDorado.tiempoEnPantalla <= 0) quesoDorado.activo = false;
-    }
-
-    if (ratonSuper) {
-        tiempoSuper--;
-        if (tiempoSuper <= 0) ratonSuper = false;
-    }
-
-    if (tiempo <= 0) terminarJuego();
-}, 1000);
-
-// --- TECLADO Y COLISIONES ---
 window.addEventListener("keydown", (e) => {
-    if (!juegoIniciado) return;
-    let stats = statsPersonajes[skinActual] || statsPersonajes["🐱"];
-
-    if (e.key === "ArrowUp") gato.y = Math.max(0, gato.y - stats.vel);
-    if (e.key === "ArrowDown") gato.y = Math.min(canvas.height - gato.h, gato.y + stats.vel);
-    if (e.key === "ArrowLeft") gato.x = Math.max(0, gato.x - stats.vel);
-    if (e.key === "ArrowRight") gato.x = Math.min(canvas.width - gato.w, gato.x + stats.vel);
-
-    procesarColisiones(stats);
+    teclas[e.key] = true;
+    if (e.key === " " || e.key === "z" || e.key === "x") {
+        atacar();
+    }
 });
 
-function procesarColisiones(stats) {
-    if (quesoDorado.activo && Math.hypot((gato.x + 17) - (quesoDorado.x + 15), (gato.y + 17) - (quesoDorado.y + 15)) < stats.alcance) {
-        quesoDorado.activo = false;
-        monedas += 50;
-        puntos += 5;
-        guardarMonedasSeguro(monedas);
-        document.getElementById("puntos-valor").innerText = puntos;
-    }
+window.addEventListener("keyup", (e) => {
+    teclas[e.key] = false;
+});
 
-    if (Math.hypot((gato.x + 17) - (raton.x + 12), (gato.y + 17) - (raton.y + 12)) < stats.alcance) {
-        if (ratonSuper) return;
-
-        puntos++;
-        monedas += (30 * dificultad);
-        experienciaRaton++;
-        localStorage.setItem("experienciaRaton", experienciaRaton);
-        guardarMonedasSeguro(monedas);
-
-        document.getElementById("puntos-valor").innerText = puntos;
-
-        raton.x = Math.random() * (canvas.width - 30);
-        raton.y = Math.random() * (canvas.height - 30);
-    }
-}
-
-// --- SOPORTE MÓVIL (TOUCH) ---
-let touchActivo = false, touchX = 0, touchY = 0;
+// Touch para móviles
+let touchX = null, touchY = null;
 
 canvas.addEventListener("touchstart", (e) => {
-    if (!juegoIniciado) return;
-    e.preventDefault(); touchActivo = true;
-    const rect = canvas.getBoundingClientRect();
-    touchX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
-    touchY = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
-}, { passive: false });
-
-canvas.addEventListener("touchmove", (e) => {
-    if (!juegoIniciado) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     touchX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
     touchY = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
 }, { passive: false });
 
-canvas.addEventListener("touchend", () => { touchActivo = false; });
+canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    touchX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+    touchY = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+}, { passive: false });
 
-function moverGatoConTouch() {
-    if (!touchActivo || !juegoIniciado) return;
-    let stats = statsPersonajes[skinActual] || statsPersonajes["🐱"];
-    let dxTouch = touchX - (gato.x + 17);
-    let dyTouch = touchY - (gato.y + 17);
-    let distTouch = Math.hypot(dxTouch, dyTouch);
+canvas.addEventListener("touchend", () => {
+    touchX = null;
+    touchY = null;
+});
 
-    if (distTouch > 10) {
-        let velTouch = Math.min(stats.vel, distTouch);
-        gato.x += (dxTouch / distTouch) * velTouch;
-        gato.y += (dyTouch / distTouch) * velTouch;
-        gato.x = Math.max(0, Math.min(canvas.width - gato.w, gato.x));
-        gato.y = Math.max(0, Math.min(canvas.height - gato.h, gato.y));
-        procesarColisiones(stats);
+function moverJugador() {
+    let dx = 0, dy = 0;
+    
+    // Teclado
+    if (teclas["ArrowUp"] || teclas["w"]) dy = -jugador.velocidad;
+    if (teclas["ArrowDown"] || teclas["s"]) dy = jugador.velocidad;
+    if (teclas["ArrowLeft"] || teclas["a"]) dx = -jugador.velocidad;
+    if (teclas["ArrowRight"] || teclas["d"]) dx = jugador.velocidad;
+    
+    // Touch
+    if (touchX !== null && touchY !== null) {
+        const angle = Math.atan2(touchY - jugador.y, touchX - jugador.x);
+        const dist = Math.hypot(touchX - jugador.x, touchY - jugador.y);
+        if (dist > 10) {
+            dx = Math.cos(angle) * jugador.velocidad;
+            dy = Math.sin(angle) * jugador.velocidad;
+        }
+    }
+    
+    // Actualizar dirección
+    if (dx > 0) jugador.direccion = "derecha";
+    if (dx < 0) jugador.direccion = "izquierda";
+    if (dy > 0) jugador.direccion = "abajo";
+    if (dy < 0) jugador.direccion = "arriba";
+    
+    // Mover
+    jugador.x += dx;
+    jugador.y += dy;
+    
+    // Límites
+    jugador.x = Math.max(0, Math.min(canvas.width - jugador.w, jugador.x));
+    jugador.y = Math.max(0, Math.min(canvas.height - jugador.h, jugador.y));
+}
+
+function atacar() {
+    if (!juegoIniciado || jugador.atacando) return;
+    
+    const ahora = Date.now();
+    if (ahora - ultimoAtaque < cooldownAtaque) return;
+    
+    ultimoAtaque = ahora;
+    jugador.atacando = true;
+    
+    // Crear efecto de ataque
+    efectos.push({
+        x: jugador.x + jugador.w/2,
+        y: jugador.y + jugador.h/2,
+        radio: 0,
+        maxRadio: jugador.alcance,
+        alpha: 1,
+        tipo: "ataque"
+    });
+    
+    // Detectar impactos
+    enemigos.forEach(enemigo => {
+        const dist = Math.hypot(
+            (jugador.x + jugador.w/2) - (enemigo.x + enemigo.w/2),
+            (jugador.y + jugador.h/2) - (enemigo.y + enemigo.h/2)
+        );
+        
+        if (dist <= jugador.alcance) {
+            enemigo.vida -= jugador.daño;
+            efectos.push({
+                x: enemigo.x + enemigo.w/2,
+                y: enemigo.y + enemigo.h/2,
+                texto: `-${jugador.daño}`,
+                alpha: 1,
+                tipo: "daño"
+            });
+            
+            if (enemigo.vida <= 0) {
+                enemigoDerrotado(enemigo);
+            }
+        }
+    });
+    
+    setTimeout(() => {
+        jugador.atacando = false;
+    }, 200);
+}
+
+function enemigoDerrotado(enemigo) {
+    enemigos = enemigos.filter(e => e !== enemigo);
+    enemigosDerrotados++;
+    xp += enemigo.tipo === "boss" ? 50 : 10;
+    
+    // Efecto de muerte
+    efectos.push({
+        x: enemigo.x + enemigo.w/2,
+        y: enemigo.y + enemigo.h/2,
+        particulas: [],
+        tipo: "explosion"
+    });
+    
+    for (let i = 0; i < 8; i++) {
+        efectos[efectos.length - 1].particulas.push({
+            x: 0,
+            y: 0,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            vida: 20
+        });
+    }
+    
+    actualizarMarcador();
+    
+    // Verificar si sala completada
+    if (enemigos.length === 0) {
+        setTimeout(() => {
+            salaActual++;
+            cargarSala(salaActual);
+        }, 1000);
     }
 }
 
+// ============================================================
+// --- IA DE ENEMIGOS ---
+// ============================================================
+
+function actualizarEnemigos() {
+    enemigos.forEach(enemigo => {
+        const dist = Math.hypot(jugador.x - enemigo.x, jugador.y - enemigo.y);
+        
+        if (enemigo.tipo === "boss") {
+            // IA del dragón
+            enemigo.timerAtaque++;
+            if (dist > 150) {
+                // Acercarse
+                const angle = Math.atan2(jugador.y - enemigo.y, jugador.x - enemigo.x);
+                enemigo.x += Math.cos(angle) * enemigo.velocidad;
+                enemigo.y += Math.sin(angle) * enemigo.velocidad;
+            }
+            if (enemigo.timerAtaque > 100 && dist < 200) {
+                // Atacar
+                enemigo.timerAtaque = 0;
+                jugador.vida -= enemigo.daño;
+                efectos.push({
+                    x: jugador.x + jugador.w/2,
+                    y: jugador.y + jugador.h/2,
+                    texto: `-${enemigo.daño}`,
+                    alpha: 1,
+                    tipo: "daño"
+                });
+                actualizarMarcador();
+                
+                if (jugador.vida <= 0) {
+                    terminarJuego();
+                }
+            }
+        } else if (enemigo.tipo === "murcielago") {
+            // Volar en patrón
+            enemigo.x += Math.sin(Date.now() / 200) * 2;
+            enemigo.y += Math.cos(Date.now() / 300) * 2;
+            
+            if (dist < 100) {
+                enemigo.x += (jugador.x - enemigo.x) * 0.02;
+                enemigo.y += (jugador.y - enemigo.y) * 0.02;
+            }
+        } else {
+            // Perseguir al jugador
+            if (dist < 300) {
+                const angle = Math.atan2(jugador.y - enemigo.y, jugador.x - enemigo.x);
+                enemigo.x += Math.cos(angle) * enemigo.velocidad;
+                enemigo.y += Math.sin(angle) * enemigo.velocidad;
+            }
+            
+            // Dañar al jugador si está cerca
+            if (dist < 40) {
+                if (!jugador.invencible) {
+                    jugador.vida -= enemigo.daño * 0.05;
+                    actualizarMarcador();
+                    
+                    if (jugador.vida <= 0) {
+                        terminarJuego();
+                    }
+                }
+            }
+        }
+        
+        // Límites
+        enemigo.x = Math.max(0, Math.min(canvas.width - enemigo.w, enemigo.x));
+        enemigo.y = Math.max(0, Math.min(canvas.height - enemigo.h, enemigo.y));
+    });
+}
+
+// ============================================================
+// --- EFECTOS VISUALES ---
+// ============================================================
+
+function actualizarEfectos() {
+    efectos.forEach((efecto, index) => {
+        if (efecto.tipo === "ataque") {
+            efecto.radio += 10;
+            efecto.alpha -= 0.1;
+            if (efecto.alpha <= 0) efectos.splice(index, 1);
+        } else if (efecto.tipo === "daño") {
+            efecto.y -= 2;
+            efecto.alpha -= 0.05;
+            if (efecto.alpha <= 0) efectos.splice(index, 1);
+        } else if (efecto.tipo === "explosion") {
+            efecto.particulas.forEach((p, i) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vida--;
+            });
+            efecto.particulas = efecto.particulas.filter(p => p.vida > 0);
+            if (efecto.particulas.length === 0) efectos.splice(index, 1);
+        }
+    });
+}
+
+// ============================================================
+// --- DIBUJADO ---
+// ============================================================
+
+function dibujar() {
+    // Fondo de la sala
+    const sala = salas[salaActual] || salas[0];
+    ctx.fillStyle = sala.fondo;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Dibujar rejilla decorativa
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+    }
+    for (let i = 0; i < canvas.height; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+    }
+    
+    // Dibujar efectos
+    efectos.forEach(efecto => {
+        if (efecto.tipo === "ataque") {
+            ctx.beginPath();
+            ctx.arc(efecto.x, efecto.y, efecto.radio, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${efecto.alpha})`;
+            ctx.fill();
+        } else if (efecto.tipo === "daño") {
+            ctx.font = "bold 20px 'Press Start 2P'";
+            ctx.fillStyle = `rgba(255, 0, 0, ${efecto.alpha})`;
+            ctx.fillText(efecto.texto, efecto.x, efecto.y);
+        } else if (efecto.tipo === "explosion") {
+            efecto.particulas.forEach(p => {
+                ctx.fillStyle = `rgba(255, 100, 100, ${p.vida / 20})`;
+                ctx.fillRect(efecto.x + p.x, efecto.y + p.y, 4, 4);
+            });
+        }
+    });
+    
+    // Dibujar enemigos
+    enemigos.forEach(enemigo => {
+        ctx.font = `${enemigo.w}px Arial`;
+        ctx.fillText(enemigo.emoji, enemigo.x, enemigo.y + enemigo.h);
+        
+        // Barra de vida del enemigo
+        const vidaPorcentaje = enemigo.vida / enemigo.vidaMax;
+        ctx.fillStyle = "#333";
+        ctx.fillRect(enemigo.x, enemigo.y - 10, enemigo.w, 5);
+        ctx.fillStyle = vidaPorcentaje > 0.5 ? "#4ecdc4" : "#ff6b6b";
+        ctx.fillRect(enemigo.x, enemigo.y - 10, enemigo.w * vidaPorcentaje, 5);
+    });
+    
+    // Dibujar jugador
+    ctx.font = `${jugador.w}px Arial`;
+    ctx.fillText(jugador.emoji, jugador.x, jugador.y + jugador.h);
+    
+    // Aura del jugador según clase
+    ctx.beginPath();
+    ctx.arc(jugador.x + jugador.w/2, jugador.y + jugador.h/2, 25, 0, Math.PI * 2);
+    ctx.fillStyle = jugador.color + "33";
+    ctx.fill();
+    
+    // Barra de vida del jugador
+    const vidaPorcentajeJugador = jugador.vida / jugador.vidaMax;
+    ctx.fillStyle = "#333";
+    ctx.fillRect(10, 10, 200, 15);
+    ctx.fillStyle = vidaPorcentajeJugador > 0.5 ? "#4ecdc4" : "#ff6b6b";
+    ctx.fillRect(10, 10, 200 * vidaPorcentajeJugador, 15);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(10, 10, 200, 15);
+}
+
+// ============================================================
+// --- BUCLE PRINCIPAL ---
+// ============================================================
+
+function gameLoop() {
+    if (!juegoIniciado) return;
+    
+    moverJugador();
+    actualizarEnemigos();
+    actualizarEfectos();
+    dibujar();
+    
+    requestAnimationFrame(gameLoop);
+}
+
 // Inicialización
-actualizarNivelVisualIA();
+actualizarMarcador();
